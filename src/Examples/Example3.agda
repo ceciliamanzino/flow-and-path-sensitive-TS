@@ -15,25 +15,25 @@ open import TypeSystem.SecurityLabels {n}
 open import TypeSystem.TypeSystem {n}
 
 x : Fin n
-x = raise 4 (fromℕ 0) 
+x = zero
 
 y : Fin n
-y = raise 3 (fromℕ 1) 
+y = suc zero 
 
 h : Fin n
-h = raise 2 (fromℕ 2) 
+h = suc (suc zero)
 
 l1 : Fin n
-l1 = raise 1 (fromℕ 3) 
+l1 = suc (suc (suc zero)) 
 
 l2 : Fin n
-l2 = fromℕ 4
+l2 = suc (suc (suc (suc zero)))
 
 -- EXAMPLE 3: The type system accepts this program if a dependent
 -- value is used in the security label of variable y, thus accepting
 -- a program that requires path-sensitivity to be considered secure.
 
-example3 : ASTStmS
+example3 : StmS
 example3 = Seq (x := IntVal 0)
           (Seq (y := IntVal 0)
           (Seq (If (Var l1) Skip (y := Var h))
