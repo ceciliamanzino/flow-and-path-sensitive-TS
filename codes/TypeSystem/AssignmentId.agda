@@ -10,7 +10,6 @@ open import Relation.Binary.PropositionalEquality
 open import Transformation.AST {n}
 
 -- Counts the number of assignments in a program statement.
--- assignCount = assigns 
 assigns : Stm → ℕ
 assigns SKIP = 0
 assigns (ASSIGN _ _) = 1
@@ -39,7 +38,6 @@ mutual
   -- which is the total number of assignments in the program being analysed, this function recursively
   -- traverses s assigning indices of type Fin t to each assignment statement it finds, starting from id
   -- and increasing it by 1 each time.
-  -- idAssignAux = idAssAux
   idAssAux : {t : ℕ} → (s : Stm) → (id : ℕ) → id + assigns s ≤ t → StmId t
   idAssAux SKIP _ _ = SKIP 
   idAssAux {t} s@(ASSIGN v e) id id+1≤t = 
@@ -56,6 +54,5 @@ mutual
     WHILE e (idAssAux s id id+aCs≤t)
 
 -- Returns the given program with each assignment having a unique (integer) identifier.
--- identifyAssigment = identifyAss
 identifyAss : (s : Stm) → StmId (assigns s)
 identifyAss s = idAssAux s zero (≤-reflexive refl)

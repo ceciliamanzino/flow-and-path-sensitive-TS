@@ -83,7 +83,6 @@ elimFalse (Join l l₁) xs = Join (elimFalse l xs) (elimFalse l₁ xs)
 
 
 -- Returns all the free variables of a security label.
---labelVariables = fvl
 fvl : SLabel → SetVar
 fvl (Level _) =  ∅
 fvl (CondExp exp l₁ l₂) =  ((fv exp) ∪ (fvl l₁)) ∪ (fvl l₂)

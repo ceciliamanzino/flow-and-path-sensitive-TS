@@ -82,7 +82,6 @@ generate (WHILE e s) p ps =
 -- Given a program statement, returns a vector of predicates so that the element in its n-th
 -- position is a predicate that is always true before the execution of the n-th assignment 
 -- of the program. 
--- generatePredicates = generatePred
 generatePred : {t : ℕ} → StmId t → Vec Pred t
 generatePred {t} stm = proj₂ (generate stm True (replicate {n = t} True))
 

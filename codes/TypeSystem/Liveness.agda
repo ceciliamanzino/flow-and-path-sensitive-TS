@@ -8,21 +8,21 @@ module TypeSystem.Liveness {c ℓ₁ ℓ₂}
                       (FChDBL : FinChnDecBoundedLattice c ℓ₁ ℓ₂)  where
 
 open import Data.Bool.Base
+  hiding (_<_)
 open import Data.Nat
 open import Data.Product
   hiding (zip) 
 open import Data.Vec.Base
-  hiding (fromList)
+  hiding (fromList ; length)
 open import Data.List
   hiding (zip ; allFin ; replicate)
-
 open import Transformation.ActiveSet {n}
 open import Transformation.AST {n}
 open import Transformation.Transformation {n}
 open import Transformation.VariableSet {n}
 open import TypeSystem.SecurityLabels {n = n} FChDBL
 open import Relation.Binary.PropositionalEquality 
-
+open import Induction.WellFounded
 
 -- open FinChnDecBoundedLattice FChDBL 
 --  renaming (Carrier to 𝕊; _≲?_ to _is≲_ ; ⊥ to Low ; ⊤ to High)
@@ -43,12 +43,17 @@ gen (ADD exp₁ exp₂) Γ = (gen exp₁ Γ) ∪ (gen exp₂ Γ)
 fromGen : Exp → TyEnv → SetVar → Set
 fromGen e Γ set = all (λ v → v ∈ set) (gen e Γ) ≡ true
 
+open import Data.Product
+open import Relation.Binary.PropositionalEquality
+open import Induction.WellFounded
 
 
--- Ceci: ver si usar el hecho de que liveIn ⊂ FinalLiveIn para decir que el cómputo de liveAux converge a un punto fijo
--- livenessAux = liveAux
--- livenessIteration = liveness
-mutual 
+------ Use in the well-founded definition
+-- orden relation: Set X is “smaller” than Y if it has fewer elements
+_⊏_ : {A : Set} → List A → List A → Set
+X ⊏ Y = length X < length Y
+  
+
   -- Uses an iterative method to calculate the liveIn set of a WHILE statement.
   -- It starts by taking the liveIn set of the statement following the WHILE block (nextLiveIn) 
   -- and joins it with the GEN set of the while condition. The result will be used as the liveIn 
@@ -58,7 +63,8 @@ mutual
   -- as the nextLiveIn for a new iteration of the function.
   -- This process is guaranteed to finish because nextLiveIn can only grow in size between iterations
   -- and the total number of possible variables is set for the program so there is an upper bound to
-  -- the resulting set size. 
+  -- the resulting set size.
+mutual  
   liveAux : {t : ℕ} → ℕ → Exp → StmId t → TyEnv → 𝒜 → SetVar → Vec SetVar t → SetVar × (Vec SetVar t)
   liveAux zero _ _ _ _ liveIn liveOuts = liveIn , liveOuts
 
