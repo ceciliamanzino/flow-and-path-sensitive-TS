@@ -21,13 +21,10 @@ open import Transformation.AST {n}
 𝒜 = Vec ℕ n
 
 
-
 -- Nunmber of variables used in an active set.
--- 𝒜varCount = fresh
 fresh : {m : ℕ} → Vec ℕ m → ℕ
 fresh [] = 0
 fresh (h ∷ tl) = suc h + fresh tl
-
 
   
 
@@ -49,8 +46,8 @@ x:=x' var A A' with lookup A var ≟ lookup A' var
 ...  | yes _ = SKIP
 ...  | no _  = ASSIGN (var , (lookup A var)) (VAR (var , (lookup A' var)))
 
-postulate <-pred : {m n : ℕ} → suc m <ₙ suc n → m <ₙ n
-
+<-pred : {m n : ℕ} → suc m <ₙ suc n → m <ₙ n
+<-pred (s≤s p) = p 
 
 𝒜assignAux : (m : ℕ) → m <ₙ n → 𝒜 → 𝒜 → Stm
 𝒜assignAux zero z<n A A' = x:=x' (fromℕ< z<n) A A'
