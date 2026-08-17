@@ -43,7 +43,7 @@ record IsFinChnDecBoundedLattice
     _≟_                : Decidable _≈_
     ≈-subst            : ∀ {x y} → (P : A → Set ℓ₂) → x ≈ y → P x → P y
     ≈-cong             : ∀ {x y} → (f : A → A) → x ≈ y → f x ≈ f y
-    _≲?_               : Decidable _≤_                -- Agregué esta línea
+    _≲?_                : Decidable _≤_                -- 2026: Agregué esta línea
     
   _<_ : Rel A (ℓ₁ ⊔ ℓ₂)
   x < y = x ≤ y × ¬ x ≈ y  
@@ -66,6 +66,22 @@ record IsFinChnDecBoundedLattice
         y<y∨x , x<y∨x , least' = supremum y x
     in antisym (least (y ∨ x) x<y∨x y<y∨x) (least' (x ∨ y) y<x∨y x<x∨y)
 
+--- Agregué 2022-----------------------------
+  ∨-idemp : ∀ x → x ≈ (x ∨ x)  
+  ∨-idemp x  =
+    let x<x∨x , x<x∨x' , least  = supremum x x
+    in antisym x<x∨x (least x refl refl)
+
+  sym≠  : ∀ {x y} → ¬ (x ≈ y) → ¬ (y ≈ x) 
+  sym≠ x≠y y≈x = x≠y (Eq.sym y≈x)  
+
+  trans≠ : ∀ {x y z} → (y ≈ z) →  ¬ (x ≈ z) → ¬ (x ≈ y) 
+  trans≠ y≈z x≠z = λ x≈y → x≠z (Eq.trans x≈y y≈z)
+
+ 
+  x=y⇒x≤y : ∀ {x y} → x ≈ y → x ≤ y
+  x=y⇒x≤y {x} {y} x≈y = ≈-subst (λ z → x ≤ z) x≈y refl
+
  
 
 record FinChnDecBoundedLattice c ℓ₁ ℓ₂ : Set (suc (c ⊔ ℓ₁ ⊔ ℓ₂)) where
@@ -75,13 +91,16 @@ record FinChnDecBoundedLattice c ℓ₁ ℓ₂ : Set (suc (c ⊔ ℓ₁ ⊔ ℓ�
     Carrier             : Set c
     _≈_                 : Rel Carrier ℓ₁  -- The underlying equality.
     _≤_                 : Rel Carrier ℓ₂  -- The partial order.
-    _∨_                : Op₂ Carrier     -- The join operation.
-    _∧_                : Op₂ Carrier
-    ⊤                  : Carrier         -- The maximum.
-    ⊥                  : Carrier         -- The minimum.
-    isFCDBoundedLattice : IsFinChnDecBoundedLattice _≈_ _≤_ _∨_  ⊤ ⊥
+    _∨_                 : Op₂ Carrier     -- The join operation.
+    ⊤                   : Carrier         -- The maximum.
+    ⊥                   : Carrier         -- The minimum.
+    isFCDBoundedLattice : IsFinChnDecBoundedLattice _≈_ _≤_ _∨_ ⊤ ⊥
     
   open IsFinChnDecBoundedLattice isFCDBoundedLattice public
 
   
+  postulate _∧_ : Op₂ Carrier
+
+
+
 
