@@ -59,7 +59,7 @@ ex6 = Seq (Seq (x := IntVal 0) (y := IntVal 0))
                
 
 env : TyEnv
-env = [ Level Low ] ∷ [ CondExp (VAR (z , zero)) (Level High) (Level Low) ] ∷ [ Level Low ] ∷ [ Level High ] ∷ [ Level Low ] ∷ [] 
+env = [ Level Low ] ∷ [ CondExp (VAR (z , {!zero!})) (Level High) (Level Low) ] ∷ [ Level Low ] ∷ [ Level High ] ∷ [ Level Low ] ∷ [] 
 
 
 typed : Maybe TypingProof

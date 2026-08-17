@@ -14,6 +14,7 @@ open import Data.Vec
   hiding ([_])
 
 open import Data.Bool
+open import Data.Product
 
 n : ℕ
 n = 5
@@ -52,12 +53,8 @@ example3 = Seq (x := IntVal 0)
                (l2 := Var x))))
 
 typeEnv : TyEnv
-typeEnv = (toList [ Level Low ]) ∷  
-          (toList [ CondExp (VAR ( l1 , zero) ) (Level Low) (Level High) ]) ∷ 
-          (toList [ Level High ]) ∷ 
-          (toList [ Level Low ]) ∷ 
-          (toList [ Level Low ]) ∷
-          [] 
+typeEnv =  [ Level Low ]  ∷ [ CondExp (VAR ( l1 , zero) ) (Level Low) (Level High) ]  ∷ 
+           [ Level High ]  ∷ [ Level Low ]  ∷ [ Level Low ]  ∷ [] 
 
 typed : Maybe TypingProof
 typed = typeProgram example3 typeEnv

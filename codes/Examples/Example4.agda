@@ -7,6 +7,7 @@ module Examples.Example4 {c ℓ₁ ℓ₂}
 
 open import Data.Fin.Base
 open import Data.Maybe.Base
+open import Data.Product
 open import Data.Nat
 open import Data.List
 open import Data.Vec
@@ -33,8 +34,8 @@ y = suc zero
 h : Fin n
 h = suc (suc zero)
 
-l1 : Fin n
-l1 = suc (suc (suc zero)) 
+l : Fin n
+l = suc (suc (suc zero)) 
 
 l2 : Fin n
 l2 = suc (suc (suc (suc zero)))
@@ -45,13 +46,13 @@ l2 = suc (suc (suc (suc zero)))
 example4 : StmS
 example4 = Seq (x := IntVal 0)
           (Seq (y := IntVal 0)
-          (Seq (If (Var l1) Skip (y := Var h))
-          (Seq (l1 := IntVal 1)
-          (Seq (If (Var l1) (x := Var y) Skip)
+          (Seq (If (Var l) Skip (y := Var h))
+          (Seq (l := IntVal 1)
+          (Seq (If (Var l) (x := Var y) Skip)
                (l2 := Var x)))))
 
 typeEnv : TyEnv
-typeEnv = [ Level Low ] ∷ [ CondExp (VAR (l1 , zero)) (Level Low) (Level High) ] ∷ 
+typeEnv = [ Level Low ] ∷ [ CondExp (VAR (l , {!zero!})) (Level Low) (Level High) ] ∷ 
           [ Level High ] ∷ [ Level Low ] ∷ [ Level Low ] ∷ [] 
 
 typed : Maybe TypingProof
