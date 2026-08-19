@@ -13,9 +13,9 @@ open import Data.Nat
 open import Data.Product
   hiding (zip) 
 open import Data.Vec.Base
-  hiding (fromList ; length)
+  hiding (fromList ; length ; foldr)
 open import Data.List
-  hiding (zip ; allFin ; replicate)
+  hiding (zip ; allFin ; replicate ; lookup)
 open import Transformation.ActiveSet {n}
 open import Transformation.AST {n}
 open import Transformation.Transformation {n}
@@ -23,12 +23,18 @@ open import Transformation.VariableSet {n}
 open import TypeSystem.SecurityLabels {n = n} FChDBL
 open import Relation.Binary.PropositionalEquality 
 open import Induction.WellFounded
+open import Data.Empty
+open import Data.Product
+  hiding (zip)
+open import Relation.Binary
+open import Induction.WellFounded
+open import Relation.Nullary
+open import Data.Nat.Properties
+ 
 
--- open FinChnDecBoundedLattice FChDBL 
---  renaming (Carrier to 𝕊; _≲?_ to _is≲_ ; ⊥ to Low ; ⊤ to High)
 
 -- Set of all active variables of an active set.
--- from𝒜ᵥₛ = from𝒜
+
 from𝒜 : 𝒜 → SetVar
 from𝒜 A = fromList (toList (zip (allFin n) A))
 
@@ -43,15 +49,75 @@ gen (ADD exp₁ exp₂) Γ = (gen exp₁ Γ) ∪ (gen exp₂ Γ)
 fromGen : Exp → TyEnv → SetVar → Set
 fromGen e Γ set = all (λ v → v ∈ set) (gen e Γ) ≡ true
 
-open import Data.Product
-open import Relation.Binary.PropositionalEquality
-open import Induction.WellFounded
+
+-- ver si dejar
+
+data _≼_ : SetVar → SetVar → Set where
+  nil : ∀ {xs} → [] ≼ xs
+  in₁  : ∀ {x xs ys} → xs ≼ ys → (x ∷ xs) ≼ (x ∷ ys)
+  in₂  : ∀ {x xs ys} → xs ≼ ys → xs ≼ (x ∷ ys)
+
+
+_≋_ : SetVar → SetVar → Set
+A ≋ B = A ≼ B × B ≼ A
+
+_≺_ : SetVar → SetVar → Set 
+A ≺ B = A ≼ B × ¬ (B ≼ A)       
+
+postulate is≼? : ∀ x y → Dec (x ≼ y)
+
+
+is≺? : ∀ x y → Dec (x ≺ y)
+is≺? x y with is≼? x y
+... | no ¬x=y = no λ { (x=y , _) → ¬x=y x=y }
+... | yes x=y with is≼? y x
+...   | yes q = no λ { (_ , ¬q) → ¬q q }
+...   | no ¬q = yes (x=y , ¬q)
+
+postulate trans-≺ : {A B C : SetVar} → A ≺ B → B ≺ C → A ≺ C  
+
+
+postulate A≺B∪A : {A B : SetVar} → A ≺ (B ∪ A)
+
+
+postulate x≺[] : {x : SetVar} → x ≺ [] → ⊥  
+
+
+---------nueva relación : cantidad de elementos que pueden agregarse a liveIn
+
+_-_ : ℕ → ℕ → ℕ
+n     - zero = n
+zero  - suc m = zero
+suc n - suc m = n - m
+
+
+♯ : 𝒜 → SetVar → ℕ
+♯ A [] = 0
+♯ A xs = foldr (λ (i , x) y → y + ((lookup A i) - x)) 0 xs  
+
+postulate decr : {xs ys : SetVar} {A : 𝒜} → xs ≺ ys → ♯ A ys < ♯ A xs   
 
 
 ------ Use in the well-founded definition
--- orden relation: Set X is “smaller” than Y if it has fewer elements
-_⊏_ : {A : Set} → List A → List A → Set
-X ⊏ Y = length X < length Y
+
+-- relation used to probe termination of liveness analysis
+least  : 𝒜 → SetVar →  SetVar  → Set
+least A xs ys =  ♯ A xs < ♯ A ys
+
+
+-- The accessibility predicate: x is accessible if everything which is
+-- smaller than x is also accessible (inductively).
+
+-- buscar <-wellFounded
+postulate wfNat : ∀ n → Acc _<_ n
+
+
+go : ∀ A xs → Acc _<_ (♯ A xs) → Acc (least A) xs
+go A x (acc rs) = acc λ y y<x → go A y (rs (♯ A y) y<x)
+
+
+wfSetVar : ∀ {A : 𝒜} → (xs : SetVar) → Acc (least A) xs   
+wfSetVar {A} xs = go A xs (wfNat (♯ A xs)) 
   
 
   -- Uses an iterative method to calculate the liveIn set of a WHILE statement.
@@ -64,17 +130,31 @@ X ⊏ Y = length X < length Y
   -- This process is guaranteed to finish because nextLiveIn can only grow in size between iterations
   -- and the total number of possible variables is set for the program so there is an upper bound to
   -- the resulting set size.
-mutual  
-  liveAux : {t : ℕ} → ℕ → Exp → StmId t → TyEnv → 𝒜 → SetVar → Vec SetVar t → SetVar × (Vec SetVar t)
-  liveAux zero _ _ _ _ liveIn liveOuts = liveIn , liveOuts
 
-  liveAux (suc i) e body Γ A liveIn liveOuts = 
-    let liveIn' = (gen e Γ) ∪ liveIn
-        bodyLiveIn , liveOuts' = liveness body Γ A liveIn' liveOuts
-        finalLiveIn = bodyLiveIn ∪ liveIn'
-      in if liveIn' ⊂ finalLiveIn 
-           then liveAux i e body Γ A finalLiveIn liveOuts'
-           else finalLiveIn , liveOuts'
+--  Acc _⊏_ finalLiveIn
+mutual
+-- version of liveAux that uses induction on well-founded relation
+  liveAuxWF : {t : ℕ} → Exp → StmId t → TyEnv → (A : 𝒜)
+            → (liveIn : SetVar)
+            → Vec SetVar t
+            → Acc (least A) liveIn
+            → SetVar × Vec SetVar t
+  liveAuxWF {t} e body Γ A liveIn liveOuts (acc rs) with is≺? ((gen e Γ) ∪ liveIn) ((proj₁ (liveness body Γ A ((gen e Γ) ∪ liveIn) liveOuts)) ∪ ((gen e Γ) ∪ liveIn)) 
+  ... | yes li'≺fi =
+   liveAuxWF e body Γ A finalLiveIn liveOuts' (rs finalLiveIn (decr li≺fi)) 
+    where  liveIn' = (gen e Γ) ∪ liveIn
+           finalLiveIn = (proj₁ (liveness body Γ A liveIn' liveOuts)) ∪ liveIn'
+           liveOuts' = proj₂ (liveness body Γ A liveIn' liveOuts)
+           li≺li' :  liveIn ≺ liveIn'
+           li≺li' = A≺B∪A {liveIn} {gen e Γ} 
+           li≺fi : liveIn ≺ finalLiveIn 
+           li≺fi = trans-≺ li≺li' li'≺fi               
+ 
+  ... | no ¬p = finalLiveIn , liveOuts' 
+    where  liveIn' = (gen e Γ) ∪ liveIn
+           finalLiveIn = (proj₁ (liveness body Γ A liveIn' liveOuts)) ∪ liveIn'
+           liveOuts' = proj₂ (liveness body Γ A liveIn' liveOuts) 
+                                             
 
   -- Calculates the liveIn set of a program by starting at its last statement and working backwards. 
   -- For that, it takes a VariableSet which holds the liveIn of a statement's successors, which corresponds to the liveOut of the statement.
@@ -99,7 +179,7 @@ mutual
      in (liveInT ∪ liveInF) ∪ (gen e Γ) , liveOutsF
      
   liveness (WHILE e s) Γ A liveIn liveOuts = 
-    liveAux (fresh A) e s Γ A liveIn liveOuts
+    liveAuxWF e s Γ A liveIn liveOuts (wfSetVar liveIn)  
 
 
 
