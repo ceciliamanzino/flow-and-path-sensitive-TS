@@ -91,9 +91,12 @@ zero  - suc m = zero
 suc n - suc m = n - m
 
 
+postulate unicity : {xs : SetVar} → length xs ≤ n
+
 ♯ : 𝒜 → SetVar → ℕ
-♯ A [] = 0
-♯ A xs = foldr (λ (i , x) y → y + ((lookup A i) - x)) 0 xs  
+♯ A [] = n 
+♯ A ((i , z) ∷ xs) = ♯ A xs - 1  
+
 
 postulate decr : {xs ys : SetVar} {A : 𝒜} → xs ≺ ys → ♯ A ys < ♯ A xs   
 
