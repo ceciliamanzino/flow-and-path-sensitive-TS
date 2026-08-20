@@ -8,8 +8,7 @@ module TypeSystem.Liveness {c ℓ₁ ℓ₂}
                       (FChDBL : FinChnDecBoundedLattice c ℓ₁ ℓ₂)  where
 
 open import Data.Bool.Base
-  hiding (_<_)
-open import Data.Nat
+  hiding (_<_ ; _≤_ )
 open import Data.Product
   hiding (zip) 
 open import Data.Vec.Base
@@ -27,11 +26,12 @@ open import Data.Empty
 open import Data.Product
   hiding (zip)
 open import Relation.Binary
-open import Induction.WellFounded
 open import Relation.Nullary
 open import Data.Nat.Properties
- 
-
+open import Data.Sum using (_⊎_; inj₁; inj₂)
+open import Data.Fin
+  renaming (_≟_ to _==_)
+  hiding (_≺_ ; _-_ ; _>_ ; _≤_ ; _<_)
 
 -- Set of all active variables of an active set.
 
@@ -49,22 +49,57 @@ gen (ADD exp₁ exp₂) Γ = (gen exp₁ Γ) ∪ (gen exp₂ Γ)
 fromGen : Exp → TyEnv → SetVar → Set
 fromGen e Γ set = all (λ v → v ∈ set) (gen e Γ) ≡ true
 
-
--- ver si dejar
-
+--------- Inclution between variable sets
 data _≼_ : SetVar → SetVar → Set where
   nil : ∀ {xs} → [] ≼ xs
   in₁  : ∀ {x xs ys} → xs ≼ ys → (x ∷ xs) ≼ (x ∷ ys)
   in₂  : ∀ {x xs ys} → xs ≼ ys → xs ≼ (x ∷ ys)
 
-
-_≋_ : SetVar → SetVar → Set
-A ≋ B = A ≼ B × B ≼ A
-
 _≺_ : SetVar → SetVar → Set 
 A ≺ B = A ≼ B × ¬ (B ≼ A)       
 
-postulate is≼? : ∀ x y → Dec (x ≼ y)
+-----------------------------------------
+--- Preperties of ≺ and ≼ --------------
+
+refl-≼ : {A : SetVar} → A ≼ A
+refl-≼ {[]} = nil
+refl-≼ {x ∷ xs} = in₁ refl-≼  
+
+trans-≼ : {A B C : SetVar} → A ≼ B → B ≼ C → A ≼ C  
+trans-≼ nil q = nil
+trans-≼ (in₁ p) (in₁ q) =  in₁ (trans-≼ p q)
+trans-≼ (in₁ xs≼ys₁) (in₂ x:ys₁≼ys) = in₂ (trans-≼ (in₁ xs≼ys₁) x:ys₁≼ys) 
+trans-≼ (in₂ p) (in₁ q) = in₂ (trans-≼ p q)
+trans-≼ (in₂ xs≼ys₁) (in₂ x:ys₁≼ys) = in₂ (trans-≼ xs≼ys₁ (trans-≼ (in₂ refl-≼ ) x:ys₁≼ys))  
+
+
+postulate antisym-≼ : ∀ {xs ys} → xs ≼ ys → ys ≼ xs → xs ≡ ys
+
+prop : ∀ {x xs ys} → (x ∷ xs) ≼ (x ∷ ys) → xs ≼ ys
+prop (in₁ xs≼ys) = xs≼ys
+prop (in₂ x:xs≼ys) = trans-≼ (in₂ refl-≼) x:xs≼ys  
+
+prop₂ :  ∀ {x y xs ys} → ¬ (x ≡ y) → (x ∷ xs) ≼ (y ∷ ys) → (x ∷ xs) ≼ ys
+prop₂ {x} {.x}  ¬x≡y (in₁ p) = ⊥-elim (¬x≡y refl) 
+prop₂ ¬x≡y (in₂ p) = p
+
+is=? : ∀ (x y : Vars) → Dec (x ≡ y)
+is=? (i , x) (j , y) with x ≟ y
+... | no x≠y = no λ r → x≠y (cong proj₂ r)  
+... | yes x=y with i == j 
+...  | yes i=j = yes (cong₂ _,_ i=j x=y) 
+...  | no i≠j  = no λ r → i≠j (cong proj₁ r) 
+
+is≼? : ∀ x y → Dec (x ≼ y)
+is≼? [] ys = yes nil
+is≼? (x ∷ xs) [] = no λ () 
+is≼? (x ∷ xs) (y ∷ ys) with is=? x y
+is≼? (x ∷ xs) (y ∷ ys) | yes refl with is≼? xs ys
+...   | yes xs≼ys = yes (in₁ xs≼ys)
+...   | no ¬xs≼ys = no (λ q → ¬xs≼ys (prop q))  
+is≼? (x ∷ xs) (y ∷ ys) | no x≠y with is≼? (x ∷ xs) ys
+...   | yes p = yes (in₂ p) 
+...   | no ¬p = no (λ q → ¬p (prop₂ x≠y q))
 
 
 is≺? : ∀ x y → Dec (x ≺ y)
@@ -74,34 +109,84 @@ is≺? x y with is≼? x y
 ...   | yes q = no λ { (_ , ¬q) → ¬q q }
 ...   | no ¬q = yes (x=y , ¬q)
 
-postulate trans-≺ : {A B C : SetVar} → A ≺ B → B ≺ C → A ≺ C  
+trans-≺ : {xs ys zs : SetVar} → xs ≺ ys → ys ≺ zs → xs ≺ zs  
+trans-≺ (xs≼ys , ¬ys≼xs) (ys≼zs , ¬zs≼ys) = ( trans-≼ xs≼ys ys≼zs , λ zs≼xs → ¬zs≼ys (trans-≼ zs≼xs xs≼ys))
+
+trans-≺₂ : {xs ys zs : SetVar} → xs ≼ ys → ys ≺ zs → xs ≺ zs  
+trans-≺₂ xs≼ys (ys≼zs , ¬zs≼ys) =  ( trans-≼ xs≼ys ys≼zs , λ zs≼xs → ¬zs≼ys (trans-≼ zs≼xs xs≼ys) )
+
+postulate x≼y∪x : {xs ys : SetVar} → xs ≼ (ys ∪ xs)
+
+x≺[] : {x : SetVar} → x ≺ [] → ⊥
+x≺[] (x≼[] , ¬[]≼x) = ¬[]≼x nil
 
 
-postulate A≺B∪A : {A B : SetVar} → A ≺ (B ∪ A)
+≼∨≺ : {xs ys : SetVar} →  (xs ≼ ys) → (xs ≺ ys) ⊎ (xs ≡ ys)  
+≼∨≺ {xs} {ys} xs≼ys with is≼? ys xs
+... | no ¬ys≼xs = inj₁ (xs≼ys , ¬ys≼xs)
+... | yes ys≼xs = inj₂ (antisym-≼ xs≼ys ys≼xs)
 
-
-postulate x≺[] : {x : SetVar} → x ≺ [] → ⊥  
-
-
----------nueva relación : cantidad de elementos que pueden agregarse a liveIn
+-------------------------------------------------------------------------
+-- definitions over naturals
 
 _-_ : ℕ → ℕ → ℕ
 n     - zero = n
 zero  - suc m = zero
 suc n - suc m = n - m
 
+suc-pred : {x : ℕ} → x > 0 → suc (x - 1) ≡ x
+suc-pred {zero} ()
+suc-pred {suc x} _ = refl
 
-postulate unicity : {xs : SetVar} → length xs ≤ n
 
+-- bounded function
 ♯ : 𝒜 → SetVar → ℕ
-♯ A [] = n 
+♯ A [] = suc n  
 ♯ A ((i , z) ∷ xs) = ♯ A xs - 1  
 
+postulate unicity : {xs : SetVar} → length xs ≤ n
+postulate lema-len : {A : 𝒜}{xs : SetVar} → length xs ≤ n  → ♯ A xs > 0
 
-postulate decr : {xs ys : SetVar} {A : 𝒜} → xs ≺ ys → ♯ A ys < ♯ A xs   
+minus-1< : {x : ℕ} → x > 0 → x - 1 < x
+minus-1< {suc x} x>0 = ≤-refl 
+
+lema-1 : {A : 𝒜} {x : Vars} {xs : SetVar} → length xs ≤ n  → ♯ A (x ∷ xs) < ♯ A xs
+lema-1 {A} {x} {xs} ♯xs≤n = minus-1< (lema-len {A} {xs} ♯xs≤n)  
+
+suc<→<  : {x y : ℕ} → suc x < suc y → x < y 
+suc<→< (s≤s p) = p
+
+x<y→x-1<y-1 : {x y : ℕ} → x > 0 → x < y → x - 1 < y - 1
+x<y→x-1<y-1 {zero} {suc y} () x<y
+x<y→x-1<y-1 {suc x} {suc y} x>0 sx<sy = suc<→<  sx<sy
+
+postulate lema-2 : {A : 𝒜} {x : Vars} {xs : SetVar} → ♯ A (x ∷ xs) < suc n 
 
 
------- Use in the well-founded definition
+postulate length-xs≤n : {xs : SetVar} → length xs ≤ n
+
+
+-- the bounded function is decreasing
+decr : {xs ys : SetVar} {A : 𝒜} → xs ≺ ys → ♯ A ys < ♯ A xs   
+decr {.[]} {[]} {A} (nil , ¬ys≼[]) = ⊥-elim (¬ys≼[] nil)
+decr {.[]} {y ∷ ys} {A} (nil , ¬y∷ys≼[]) = lema-2 {A} {y} {ys}
+
+decr {x ∷ xs} {y ∷ ys} {A} (in₁ xs≼ys , ¬x∷xs≼y∷ys) = 
+   let p : ♯ A ys < ♯ A xs
+       p = decr {xs} {ys} {A} (xs≼ys , λ q → ¬x∷xs≼y∷ys (in₁ q))
+   in x<y→x-1<y-1 {♯ A ys} {♯ A xs} (lema-len {A} {xs = ys}  (unicity {ys})) p   
+
+decr {xs} {y ∷ ys} {A} (in₂ xs≼ys , ¬y∷ys≼xs) with ≼∨≺ xs≼ys
+... | inj₁ xs≺ys = 
+  let p : ♯ A (y ∷ ys) < ♯ A ys
+      p = lema-1 {A} {y} {ys} (unicity {ys}) 
+      q : ♯ A ys < ♯ A xs
+      q = decr {xs} {ys} {A} xs≺ys 
+  in  <-trans p q
+... | inj₂ refl = let n=m : suc (♯ A xs - 1) ≡ ♯ A xs
+                      n=m = suc-pred (lema-len {A} {xs = xs} (unicity {xs = xs}))   
+                  in subst (λ z → suc (♯ A xs - 1) ≤ z) n=m ≤-refl 
+
 
 -- relation used to probe termination of liveness analysis
 least  : 𝒜 → SetVar →  SetVar  → Set
@@ -114,15 +199,13 @@ least A xs ys =  ♯ A xs < ♯ A ys
 -- buscar <-wellFounded
 postulate wfNat : ∀ n → Acc _<_ n
 
-
+---- we probe well-founded of least using well founded of _<_
 go : ∀ A xs → Acc _<_ (♯ A xs) → Acc (least A) xs
 go A x (acc rs) = acc λ y y<x → go A y (rs (♯ A y) y<x)
-
 
 wfSetVar : ∀ {A : 𝒜} → (xs : SetVar) → Acc (least A) xs   
 wfSetVar {A} xs = go A xs (wfNat (♯ A xs)) 
   
-
   -- Uses an iterative method to calculate the liveIn set of a WHILE statement.
   -- It starts by taking the liveIn set of the statement following the WHILE block (nextLiveIn) 
   -- and joins it with the GEN set of the while condition. The result will be used as the liveIn 
@@ -144,14 +227,14 @@ mutual
             → SetVar × Vec SetVar t
   liveAuxWF {t} e body Γ A liveIn liveOuts (acc rs) with is≺? ((gen e Γ) ∪ liveIn) ((proj₁ (liveness body Γ A ((gen e Γ) ∪ liveIn) liveOuts)) ∪ ((gen e Γ) ∪ liveIn)) 
   ... | yes li'≺fi =
-   liveAuxWF e body Γ A finalLiveIn liveOuts' (rs finalLiveIn (decr li≺fi)) 
+   liveAuxWF e body Γ A finalLiveIn liveOuts' (rs finalLiveIn (decr {A = A} li≺fi)) 
     where  liveIn' = (gen e Γ) ∪ liveIn
            finalLiveIn = (proj₁ (liveness body Γ A liveIn' liveOuts)) ∪ liveIn'
            liveOuts' = proj₂ (liveness body Γ A liveIn' liveOuts)
-           li≺li' :  liveIn ≺ liveIn'
-           li≺li' = A≺B∪A {liveIn} {gen e Γ} 
+           li≼li' :  liveIn ≼ liveIn'
+           li≼li' = x≼y∪x {liveIn} {gen e Γ} 
            li≺fi : liveIn ≺ finalLiveIn 
-           li≺fi = trans-≺ li≺li' li'≺fi               
+           li≺fi = trans-≺₂ li≼li' li'≺fi               
  
   ... | no ¬p = finalLiveIn , liveOuts' 
     where  liveIn' = (gen e Γ) ∪ liveIn
@@ -182,7 +265,7 @@ mutual
      in (liveInT ∪ liveInF) ∪ (gen e Γ) , liveOutsF
      
   liveness (WHILE e s) Γ A liveIn liveOuts = 
-    liveAuxWF e s Γ A liveIn liveOuts (wfSetVar liveIn)  
+    liveAuxWF e s Γ A liveIn liveOuts (wfSetVar {A = A} liveIn)  
 
 
 
