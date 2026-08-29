@@ -31,7 +31,9 @@ open import Data.Nat.Properties
 open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Data.Fin
   renaming (_≟_ to _==_)
-  hiding (_≺_ ; _-_ ; _>_ ; _≤_ ; _<_)
+  hiding (_≺_ ; _-_ ; _>_ ; _≤_ ; _<_ ; _+_)
+open import Data.Nat.Induction
+   using (<-wellFounded)  
 
 -- Set of all active variables of an active set.
 
@@ -144,8 +146,43 @@ suc-pred {suc x} _ = refl
 ♯ A [] = suc n  
 ♯ A ((i , z) ∷ xs) = ♯ A xs - 1  
 
-postulate unicity : {xs : SetVar} → length xs ≤ n
-postulate lema-len : {A : 𝒜}{xs : SetVar} → length xs ≤ n  → ♯ A xs > 0
+
+postulate n+1+m-1≡n+m : ∀ n m → (suc n) + m - 1 ≡ n + m
+postulate n-1<m+n : ∀ {n m} →  n - 1 < m + n
+
+
+lemma-suma : {A : 𝒜} {xs : SetVar} →
+            length xs + ♯ A xs ≡ suc n
+lemma-suma {A} {[]} = refl
+lemma-suma {A} {(i , z) ∷ xs} =
+ let xs+#Axs≡1+n : length xs + ♯ A xs ≡ suc n
+     xs+#Axs≡1+n = lemma-suma {A} {xs}
+     p : suc (length (xs)) + (♯ A xs) - 1 ≡ suc n
+     p = trans (n+1+m-1≡n+m (length (xs)) (♯ A xs)) xs+#Axs≡1+n  
+ in p
+
+
+x≡x+0 : ∀ {x} → x ≡ x + 0
+x≡x+0 {zero} = refl
+x≡x+0 {suc x} = cong suc (x≡x+0 {x})
+
+trivial : ∀ {x y z} → y ≡ 0 → x + y ≡ z → x ≡ z
+trivial refl x+y≡z = trans x≡x+0 x+y≡z
+
+suc-n≰n : ∀ n → ¬ (suc n ≤ n)
+suc-n≰n zero    ()
+suc-n≰n (suc n) (s≤s p) = suc-n≰n n p
+
+
+lema-len : {A : 𝒜}{xs : SetVar} → length xs ≤ n  → ♯ A xs > 0
+lema-len {A} {xs} xs≤n with (♯ A xs) | inspect (♯ A) xs
+... | zero | [ eq ] = let xs≡n+1 : length xs ≡ suc n
+                          xs≡n+1 = trivial {length xs} {♯ A xs} {suc n} eq (lemma-suma {A} {xs})
+                          suc≤n : suc n ≤ n
+                          suc≤n = subst (λ k → k ≤ n) xs≡n+1 xs≤n 
+                      in ⊥-elim (suc-n≰n n suc≤n) 
+
+... | suc k | [ eq ] =   s≤s z≤n 
 
 minus-1< : {x : ℕ} → x > 0 → x - 1 < x
 minus-1< {suc x} x>0 = ≤-refl 
@@ -160,7 +197,9 @@ x<y→x-1<y-1 : {x y : ℕ} → x > 0 → x < y → x - 1 < y - 1
 x<y→x-1<y-1 {zero} {suc y} () x<y
 x<y→x-1<y-1 {suc x} {suc y} x>0 sx<sy = suc<→<  sx<sy
 
-postulate lema-2 : {A : 𝒜} {x : Vars} {xs : SetVar} → ♯ A (x ∷ xs) < suc n 
+
+lema-2 : {A : 𝒜} {x : Vars} {xs : SetVar} → ♯ A (x ∷ xs) < suc n 
+lema-2 {A} {x} {xs} = subst (λ k → ♯ A (x ∷ xs) < k) (lemma-suma {A} {xs}) (n-1<m+n {♯ A xs} {length xs})  
 
 
 postulate length-xs≤n : {xs : SetVar} → length xs ≤ n
@@ -169,22 +208,22 @@ postulate length-xs≤n : {xs : SetVar} → length xs ≤ n
 -- the bounded function is decreasing
 decr : {xs ys : SetVar} {A : 𝒜} → xs ≺ ys → ♯ A ys < ♯ A xs   
 decr {.[]} {[]} {A} (nil , ¬ys≼[]) = ⊥-elim (¬ys≼[] nil)
-decr {.[]} {y ∷ ys} {A} (nil , ¬y∷ys≼[]) = lema-2 {A} {y} {ys}
+decr {.[]} {y ∷ ys} {A} (nil , ¬y∷ys≼[]) =  lema-2 {A} {y} {ys}
 
 decr {x ∷ xs} {y ∷ ys} {A} (in₁ xs≼ys , ¬x∷xs≼y∷ys) = 
    let p : ♯ A ys < ♯ A xs
        p = decr {xs} {ys} {A} (xs≼ys , λ q → ¬x∷xs≼y∷ys (in₁ q))
-   in x<y→x-1<y-1 {♯ A ys} {♯ A xs} (lema-len {A} {xs = ys}  (unicity {ys})) p   
+   in x<y→x-1<y-1 {♯ A ys} {♯ A xs} (lema-len {A} {xs = ys}  (length-xs≤n {ys})) p   
 
 decr {xs} {y ∷ ys} {A} (in₂ xs≼ys , ¬y∷ys≼xs) with ≼∨≺ xs≼ys
 ... | inj₁ xs≺ys = 
   let p : ♯ A (y ∷ ys) < ♯ A ys
-      p = lema-1 {A} {y} {ys} (unicity {ys}) 
+      p = lema-1 {A} {y} {ys} (length-xs≤n {ys}) 
       q : ♯ A ys < ♯ A xs
       q = decr {xs} {ys} {A} xs≺ys 
   in  <-trans p q
 ... | inj₂ refl = let n=m : suc (♯ A xs - 1) ≡ ♯ A xs
-                      n=m = suc-pred (lema-len {A} {xs = xs} (unicity {xs = xs}))   
+                      n=m = suc-pred (lema-len {A} {xs = xs} (length-xs≤n {xs = xs}))   
                   in subst (λ z → suc (♯ A xs - 1) ≤ z) n=m ≤-refl 
 
 
@@ -197,8 +236,8 @@ least A xs ys =  ♯ A xs < ♯ A ys
 -- smaller than x is also accessible (inductively).
 
 -- buscar <-wellFounded
-postulate wfNat : ∀ n → Acc _<_ n
-
+wfNat : ∀ n → Acc _<_ n
+wfNat = <-wellFounded
 ---- we probe well-founded of least using well founded of _<_
 go : ∀ A xs → Acc _<_ (♯ A xs) → Acc (least A) xs
 go A x (acc rs) = acc λ y y<x → go A y (rs (♯ A y) y<x)
